@@ -16,9 +16,7 @@
             touch-action: none; user-select: none; -webkit-user-select: none; 
         }
         canvas { display: block; touch-action: none; }
-        .font-preloader {
-            position: absolute; opacity: 0; pointer-events: none; font-family: 'ouroboros';
-        }
+        .font-preloader { position: absolute; opacity: 0; pointer-events: none; font-family: 'ouroboros'; }
     </style>
 </head>
 <body>
@@ -41,7 +39,6 @@ const levelSettings = {
     7: { minScore: 1000, speed: 2.8, title: "Уровень 7" }
 };
 
-// Загрузка ресурсов
 const catImg = new Image(); catImg.src = 'cat.png';
 const starImg = new Image(); starImg.src = 'star.png';
 const bombImg = new Image(); bombImg.src = 'bomb.png';
@@ -56,6 +53,7 @@ const cat = { x: 0, y: 0, w: 19, h: 17, scale: 4 };
 let W, H, dpr = window.devicePixelRatio || 1;
 let state = "menu", items = [], score = 0, highScore = 0;
 let snowflakes = [], bonusTextTime = 0, level = 1, lives = 3;
+let lastTime = 0;
 
 try { highScore = parseInt(localStorage.getItem("catHighScore")) || 0; } catch(e) { highScore = 0; }
 
@@ -71,10 +69,8 @@ function resize() {
         snowflakes.push({ x: Math.random() * W, y: Math.random() * H, speed: 0.5 + Math.random() * 1.5, radius: 1 + Math.random() * 2 });
     }
 }
-
 window.addEventListener("resize", resize);
 
-// Управление
 let isDragging = false, lastX = 0;
 function startAction(clientX) {
     lastX = clientX; isDragging = true;
@@ -155,12 +151,10 @@ function updateGame() {
             else { ctx.font = "30px 'ouroboros', sans-serif"; ctx.fillText("⭐", item.x, item.y); }
         } else if (item.type === "fish") {
             if (fishLoaded) {
-                const fScale = 2.5;
-                const fW = 26 * fScale; const fH = 11 * fScale;
+                const fScale = 2.5; const fW = 26 * fScale; const fH = 11 * fScale;
                 ctx.drawImage(fishImg, item.x - fW / 2, item.y - fH / 2, fW, fH);
             } else { 
-                ctx.font = "30px 'ouroboros', sans-serif"; ctx.textAlign = "center";
-                ctx.fillText("🐟", item.x, item.y);
+                ctx.font = "30px 'ouroboros', sans-serif"; ctx.textAlign = "center"; ctx.fillText("🐟", item.x, item.y);
             }
         } else if (item.type === "bomb") {
             if (bombLoaded) ctx.drawImage(bombImg, item.x - 17, item.y - 17, 35, 35);
@@ -199,7 +193,14 @@ function updateGame() {
     }
 }
 
-function loop() {
+function loop(timestamp) {
+    let deltaTime = timestamp - lastTime;
+    if (deltaTime < 16) {
+        requestAnimationFrame(loop);
+        return;
+    }
+    lastTime = timestamp;
+
     ctx.clearRect(0, 0, W, H);
     let grad = ctx.createLinearGradient(0, 0, 0, H);
     grad.addColorStop(0, "#2D5A27"); grad.addColorStop(0.5, "#1A331A"); grad.addColorStop(1, "#5E1914");
@@ -212,16 +213,8 @@ function loop() {
     requestAnimationFrame(loop);
 }
 
-catImg.onload = () => {
-    imgLoaded = true;
-    resize();
-    loop();
-};
-
-if (catImg.complete) {
-    resize();
-    loop();
-}
+catImg.onload = () => { imgLoaded = true; resize(); requestAnimationFrame(loop); };
+if (catImg.complete) { resize(); requestAnimationFrame(loop); }
 </script>
 </body>
 </html>
