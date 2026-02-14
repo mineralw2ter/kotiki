@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>котикииии</title>
+    <style>
+        @font-face {
+            font-family: 'ouroboros';
+            src: url('ouroboros.ttf') format('truetype');
+            font-display: swap;
+        }
+        body { 
+            margin: 0; padding: 0; background: #111; color: white; 
+            font-family: 'ouroboros', sans-serif; overflow: hidden; 
+            touch-action: none; user-select: none; -webkit-user-select: none; 
+        }
+        canvas { display: block; touch-action: none; }
+        .font-preloader {
+            position: absolute; opacity: 0; pointer-events: none; font-family: 'ouroboros';
+        }
+    </style>
+</head>
+<body>
+<div class="font-preloader">котики прелоад</div>
+<canvas id="game"></canvas>
+
+<script>
+window.onerror = function(msg, url, line) { alert("Ошибка: " + msg + "\nСтрока: " + line); };
+
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+const levelSettings = {
+    1: { minScore: 0, speed: 1.0, title: "Уровень 1" },
+    2: { minScore: 100, speed: 1.2, title: "Уровень 2" },
+    3: { minScore: 250, speed: 1.5, title: "Уровень 3" },
+    4: { minScore: 400, speed: 1.8, title: "Уровень 4" },
+    5: { minScore: 600, speed: 2.1, title: "Уровень 5" },
+    6: { minScore: 800, speed: 2.4, title: "Уровень 6" },
+    7: { minScore: 1000, speed: 2.8, title: "Уровень 7" }
+};
+
+// Загрузка ресурсов
+const catImg = new Image(); catImg.src = 'cat.png';
+const starImg = new Image(); starImg.src = 'star.png';
+const bombImg = new Image(); bombImg.src = 'bomb.png';
+const fishImg = new Image(); fishImg.src = 'fish.png';
+
+let imgLoaded = false; catImg.onload = () => { imgLoaded = true; };
+let starLoaded = false; starImg.onload = () => { starLoaded = true; };
+let bombLoaded = false; bombImg.onload = () => { bombLoaded = true; };
+let fishLoaded = false; fishImg.onload = () => { fishLoaded = true; };
+
+const cat = { x: 0, y: 0, w: 19, h: 17, scale: 4 };
+let W, H, dpr = window.devicePixelRatio || 1;
+let state = "menu", items = [], score = 0, highScore = 0;
+let snowflakes = [], bonusTextTime = 0, level = 1, lives = 3;
+
+try { highScore = parseInt(localStorage.getItem("catHighScore")) || 0; } catch(e) { highScore = 0; }
+
+function resize() {
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    canvas.style.width = W + "px"; canvas.style.height = H + "px";
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.scale(dpr, dpr);
+    ctx.imageSmoothingEnabled = false;
+    cat.x = W / 2; cat.y = H - 100;
+    snowflakes = [];
+    for (let i = 0; i < 50; i++) {
+        snowflakes.push({ x: Math.random() * W, y: Math.random() * H, speed: 0.5 + Math.random() * 1.5, radius: 1 + Math.random() * 2 });
+    }
+}
+
+window.addEventListener("resize", resize);
+
+// Управление
+let isDragging = false, lastX = 0;
+function startAction(clientX) {
+    lastX = clientX; isDragging = true;
+    if (state === "menu") state = "tutorial";
+    else if (state === "tutorial") state = "game";
+    else if (state === "gameover") { score = 0; items = []; lives = 3; level = 1; state = "game"; }
+}
+function moveAction(clientX) {
+    if (!isDragging || state !== "game") return;
+    cat.x += clientX - lastX;
+    let margin = (cat.w * cat.scale) / 2;
+    if (cat.x < margin) cat.x = margin;
+    if (cat.x > W - margin) cat.x = W - margin;
+    lastX = clientX;
+}
+
+canvas.addEventListener("touchstart", e => { e.preventDefault(); startAction(e.touches[0].clientX); }, { passive: false });
+canvas.addEventListener("touchmove", e => { e.preventDefault(); moveAction(e.touches[0].clientX); }, { passive: false });
+canvas.addEventListener("touchend", () => isDragging = false);
+
+function drawSnow() {
+    ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
+    for (let s of snowflakes) {
+        ctx.beginPath(); ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2); ctx.fill();
+        s.y += s.speed; if (s.y > H) { s.y = -10; s.x = Math.random() * W; }
+    }
+}
+
+function drawMenu() {
+    ctx.textAlign = "center"; ctx.fillStyle = "#FFD700"; ctx.font = "bold 35px 'ouroboros', sans-serif";
+    ctx.fillText("котики!!", W / 2, H / 2 - 40);
+    ctx.font = "20px 'ouroboros', sans-serif"; ctx.fillStyle = "white"; ctx.fillText("тыкни", W / 2, H / 2 + 40);
+}
+
+function drawTutorial() {
+    ctx.textAlign = "center"; ctx.fillStyle = "white";
+    ctx.font = "bold 22px 'ouroboros', sans-serif"; ctx.fillText("С Новым Годом Кирочка ♡", W / 2, 100);
+    ctx.font = "18px 'ouroboros', sans-serif"; ctx.fillText("лови звездочки,", W / 2, 180);
+    ctx.fillText("избегай бомбочек,", W / 2, 220);
+    ctx.fillText("двигай котика пальцем", W / 2, 280);
+    ctx.font = "bold 20px 'ouroboros', sans-serif"; ctx.fillText("тыкни чтобы начать", W / 2, 380);
+}
+
+function drawGameOver() {
+    ctx.textAlign = "center"; ctx.fillStyle = "#ff4444"; ctx.font = "bold 40px 'ouroboros', sans-serif";
+    ctx.fillText("game over", W / 2, H / 2 - 50);
+    ctx.fillStyle = "white"; ctx.font = "20px 'ouroboros', sans-serif";
+    ctx.fillText("(но ты всё равно умничка 💋)", W / 2, H / 2);
+    ctx.fillText("Счёт: " + score, W / 2, H / 2 + 40);
+    ctx.fillText("тык чтобы заново", W / 2, H / 2 + 90);
+}
+
+function updateGame() {
+    for (let l in levelSettings) { if (score >= levelSettings[l].minScore) level = parseInt(l); }
+
+    if (imgLoaded) {
+        let dw = cat.w * cat.scale, dh = cat.h * cat.scale;
+        ctx.drawImage(catImg, cat.x - dw / 2, cat.y - dh / 2, dw, dh);
+    }
+
+    if (Math.random() < 0.04) {
+        let typeRand = Math.random();
+        let newItem = { 
+            x: Math.random() * (W - 60) + 30, y: -50, 
+            type: "star", points: 1, 
+            speed: (3 + Math.random() * 4) * levelSettings[level].speed 
+        };
+        if (typeRand < 0.25) { newItem.type = "bomb"; }
+        else if (typeRand > 0.85 && level >= 2) { newItem.type = "fish"; newItem.points = 2; }
+        items.push(newItem);
+    }
+
+    for (let i = items.length - 1; i >= 0; i--) {
+        let item = items[i]; item.y += item.speed;
+        
+        if (item.type === "star") {
+            if (starLoaded) ctx.drawImage(starImg, item.x - 16, item.y - 16, 32, 32);
+            else { ctx.font = "30px 'ouroboros', sans-serif"; ctx.fillText("⭐", item.x, item.y); }
+        } else if (item.type === "fish") {
+            if (fishLoaded) {
+                const fScale = 2.5;
+                const fW = 26 * fScale; const fH = 11 * fScale;
+                ctx.drawImage(fishImg, item.x - fW / 2, item.y - fH / 2, fW, fH);
+            } else { 
+                ctx.font = "30px 'ouroboros', sans-serif"; ctx.textAlign = "center";
+                ctx.fillText("🐟", item.x, item.y);
+            }
+        } else if (item.type === "bomb") {
+            if (bombLoaded) ctx.drawImage(bombImg, item.x - 17, item.y - 17, 35, 35);
+            else { ctx.font = "30px 'ouroboros', sans-serif"; ctx.fillText("💣", item.x, item.y); }
+        }
+
+        if (Math.hypot(item.x - cat.x, item.y - (cat.y - 10)) < 40) {
+            if (item.type === "star" || item.type === "fish") {
+                score += item.points;
+                if (score >= 50 && score < 53) bonusTextTime = 120;
+            } else if (item.type === "bomb") {
+                lives--;
+                if (lives <= 0) {
+                    if (score > highScore) { highScore = score; try { localStorage.setItem("catHighScore", highScore); } catch(e){} }
+                    state = "gameover"; 
+                }
+            }
+            items.splice(i, 1); continue;
+        }
+        if (item.y > H + 50) items.splice(i, 1);
+    }
+
+    ctx.font = "bold 18px 'ouroboros', sans-serif"; 
+    ctx.textAlign = "left"; ctx.fillStyle = "white";
+    ctx.fillText("⭐ " + score + "  ❤️ " + lives, 20, 40); 
+    ctx.textAlign = "right";
+    ctx.fillText("🏆 " + highScore, W - 20, 40);
+    ctx.textAlign = "center"; ctx.fillStyle = "#FFD700"; ctx.font = "bold 14px 'ouroboros', sans-serif";
+    ctx.fillText(levelSettings[level].title.toUpperCase(), W / 2, 40);
+
+    if (bonusTextTime > 0) {
+        ctx.save(); ctx.textAlign = "center"; ctx.fillStyle = "#FFD700"; ctx.font = "bold 30px 'ouroboros', sans-serif";
+        let s = 1 + Math.sin(bonusTextTime * 0.1) * 0.1;
+        ctx.translate(W / 2, H / 2); ctx.scale(s, s); ctx.fillText("💋💋💋", 0, 0);
+        ctx.restore(); bonusTextTime--;
+    }
+}
+
+function loop() {
+    ctx.clearRect(0, 0, W, H);
+    let grad = ctx.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, "#2D5A27"); grad.addColorStop(0.5, "#1A331A"); grad.addColorStop(1, "#5E1914");
+    ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
+    drawSnow();
+    if (state === "menu") drawMenu();
+    else if (state === "tutorial") drawTutorial();
+    else if (state === "game") updateGame();
+    else if (state === "gameover") drawGameOver();
+    requestAnimationFrame(loop);
+}
+
+catImg.onload = () => {
+    imgLoaded = true;
+    resize();
+    loop();
+};
+
+if (catImg.complete) {
+    resize();
+    loop();
+}
+</script>
+</body>
+</html>
