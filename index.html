@@ -420,7 +420,7 @@ function drawCollection() {
         ctx.fillText(itemsDB[selectedItem].name, W / 2, H - 160);
         
         ctx.font = "16px 'ouroboros'"; 
-        let txt = itemsDB[selectedItem].unlocked ? itemsDB[selectedItem].desc : "???";
+        let txt = itemsDB[selectedItem].unlocked ? itemsDB[selectedItem].desc : "Ты ещё не знаешь что это, дорогая.";
         wrapText(txt, W / 2, H - 130, W - 40, 20); 
     }
     ctx.fillStyle = "#ff5476"; ctx.font = "18px 'ouroboros'"; ctx.fillText("назад в меню", W / 2, H - 40);
